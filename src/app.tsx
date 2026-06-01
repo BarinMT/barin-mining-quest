@@ -789,4 +789,39 @@ export default function App() {
   const handleLangSelect = (l: string) => { setLang(l); setScreen("onboarding"); };
 
   const handleCharSelect = async (char: any) => {
-    setCharacter(char); se
+    setCharacter(char); setScreen("game");
+    await supabase.from("players").upsert({ telegram_id: userId, username, character_id: char.id, gender: char.gender, lang, barin: 0, xp: 0, completed_missions: [], streak: 1, last_login: new Date().toISOString() });
+  };
+
+  const handleMissionComplete = useCallback(async (id: number, reward: number, submission: string) => {
+    if (completedMissions.includes(id)) return;
+    const newCompleted = [...completedMissions, id];
+    const newBarin = barin + reward;
+    const newXp = xp + Math.floor(reward * 0.5);
+    setCompletedMissions(newCompleted); setBarin(newBarin); setXp(newXp);
+    await supabase.from("players").update({ barin: newBarin, xp: newXp, completed_missions: newCompleted }).eq("telegram_id", userId);
+    await supabase.from("mission_submissions").insert({ telegram_id: userId, username, mission_id: id, submission, status: "pending", created_at: new Date().toISOString() });
+  }, [completedMissions, barin, xp, userId, username]);
+
+  const handleTapEarn = useCallback(async (amount: number) => {
+    const earned = Math.floor(amount * 0.1);
+    setBarin(b => { const nb = b + earned; supabase.from("players").update({ barin: nb }).eq("telegram_id", userId); return nb; });
+  }, [userId]);
+
+  if (loading) return <div style={{ minHeight: "100vh", background: "#07080f", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 16 }}>⛏️</div><div style={{ color: "#F59E0B", fontSize: 14 }}>Loading...</div></div></div>;
+
+  if (screen === "language") return <LanguageSelect onSelect={handleLangSelect} />;
+  if (screen === "onboarding") return <Onboarding onComplete={() => setScreen("charselect")} lang={lang} />;
+  if (screen === "charselect") return <CharacterSelect onSelect={handleCharSelect} lang={lang} />;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#07080f", color: "#F9FAFB", fontFamily: "monospace", maxWidth: 430, margin: "0 auto", position: "relative" }}>
+      {activeTab === "home" && <Home character={character} xp={xp} barin={barin} setActive={setActiveTab} streak={streak} lang={lang} />}
+      {activeTab === "missions" && <Missions character={character} onComplete={handleMissionComplete} completedMissions={completedMissions} lang={lang} />}
+      {activeTab === "tap" && <TapToEarn onEarn={handleTapEarn} lang={lang} />}
+      {activeTab === "leaderboard" && <Leaderboard userId={userId} lang={lang} />}
+      {activeTab === "learn" && <Learn lang={lang} />}
+      <BottomNav active={activeTab} setActive={setActiveTab} lang={lang} />
+    </div>
+  );
+}
